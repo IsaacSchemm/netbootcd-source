@@ -1,0 +1,12 @@
+tce-load -i readline-dev
+
+cd bash-4.3.30
+
+patch -Np1 -i ../bash-4.3.30-upstream_fixes-2.patch
+
+CC="gcc -flto -fuse-linker-plugin -march=i486 -mtune=i686 -Os -pipe" CXX="g++ -flto -fuse-linker-plugin -march=i486 -mtune=i686 -Os -pipe -fno-exceptions -fno-rtti" ./configure --prefix=/usr/local --localstatedir=/var --without-bash-malloc --with-installed-readline
+
+find . -name Makefile -type f -exec sed -i 's/-O2//g' {} \;
+
+make
+make install

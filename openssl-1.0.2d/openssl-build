@@ -1,0 +1,479 @@
+#!/bin/sh
+# run as root please with locale set
+######################################
+#####   CREDITS   bmarkus and Juanito
+######################################
+
+export CFLAGS="-O2 -pipe -march=i486 -mtune=i686"
+export CXXFLAGS="-O2 -pipe -fno-exceptions -fno-rtti -march=i486 -mtune=i686"
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+
+P=openssl
+PBIN=$P/usr/local/bin
+PENG=$P/usr/local/lib/engines
+PINC=$P/usr/local/include
+PPKG=$P/usr/local/lib/pkgconfig
+PLIB=$P/usr/local/lib
+PLOC=$P/usr/local
+PMAN=$P/usr/local/etc/ssl/man
+PS=$P/usr/local/etc/ssl
+VLIB=$P-dev/usr/local/lib
+VLOC=$P-dev/usr/local  
+PDOC=$P-doc/usr/local/share
+USER=`cat /etc/sysconfig/tcuser`
+
+LIST="compiletc submitqc6 makedepend perl5 openssl-1.0.1"
+for Z in $LIST
+    do 
+    su -c "tce-load -i $Z" $USER
+done
+
+cd /tmp
+su -c "wget http://openssl.org/source/openssl-1.0.2d.tar.gz" $USER 
+
+su -c "wget http://anduin.linuxfromscratch.org/sources/other/certdata.txt" $USER 
+
+su -c "/usr/local/bin/wget -nc  \
+https://www.dropbox.com/s/mqc7z9g1mqhh055/make-ca.sh?dl=0 \
+-O /tmp/make-ca.sh " $USER 
+
+su -c "/usr/local/bin/wget -nc  \
+https://www.dropbox.com/s/z1u4ig7vwhkwn8a/make-cert.pl?dl=0 \
+-O /tmp/make-cert.pl " $USER 
+
+################
+# openssl  part one
+################
+
+tar xvf openssl-1.0.2d.tar.gz
+cd openssl-1.0.2d
+./config -t
+####################################################
+# Operating system: i686-whatever-linux2
+# Configuring for linux-elf
+# /usr/local/bin/perl ./Configure linux-elf -Wa,--noexecstack
+####################################################
+
+./config --prefix=/usr/local --openssldir=/usr/local/etc/ssl shared zlib no-ssl2 no-ssl3
+makedepend
+# make takes about 5 minutes for me 8G ram Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz
+make -j5
+make test
+mkdir -p /tmp/$P
+make install INSTALL_PREFIX=/tmp/$P
+
+# Strip 
+########
+cd /tmp/$P
+find . | xargs file | grep "executable"| grep ELF\
+ | grep "not stripped" | cut -f 1 -d : | xargs strip --strip-all 2> /dev/null
+find . | xargs file | grep "shared object" | grep ELF\
+ | grep "not stripped" | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
+find . | xargs file | grep "current ar archive"\
+ | cut -f 1 -d : | xargs strip --strip-debug 2> /dev/null
+cd /tmp
+
+# stripping the *.a files currently a fail.
+
+# create dev
+#########
+mkdir -p $P-dev/usr/local/include
+mkdir -p $P-dev/usr/local/lib
+mv $PLOC/include $VLOC/
+mv $PPKG $VLIB
+mv $PLIB/libssl.a $VLIB/
+mv $PLIB/libcrypto.a $VLIB/
+
+# create doc PART ONE
+##################
+#  certs also adds to it later
+mkdir -p $PDOC
+mv $PMAN $PDOC/
+
+# fix perms
+#########
+chmod 755 $PLIB/*.so*
+chmod 755 $PLIB/engines/*
+
+######################################################
+# now add certs
+############
+cp -f make-cert.pl /usr/local/bin/
+chmod +x /usr/local/bin/make-cert.pl
+chmod +x make-ca.sh
+sh make-ca.sh
+mkdir mozilla
+PEM=`ls certs  | sed -r -s 's/.{4}$//'`
+
+# updating certdata leads to new certs so make a backup of the pem first
+# to get new filename we cat the pem file and look at the CN and copy
+# and paste into a text editor then add the understems etc
+cp -R certs certs-pem
+
+cd certs
+for Z in $PEM
+do
+openssl x509 -in $Z.pem -out /tmp/mozilla/$Z.crt
+done
+cd /tmp
+
+# create combo certificate
+#####################
+cat mozilla/* > /tmp/ca-certificates.crt
+
+# rename certs to CN 
+###########################
+cd mozilla
+mv 0b1b94ef.crt CFCA_EV_ROOT.crt
+mv 0ba01d19.crt SG_TRUST_SERVICES_RACINE.crt
+mv 0c4c9b6c.crt Global_Chambersign_Root_-_2008.crt
+mv 0d1b923b.crt S-TRUST_Authentication_and_Encryption_Root_CA_2005_PN.crt
+mv 02265526.crt Entrust_Root_Certification_Authority_-_G2.crt
+mv 024dc131.crt Microsec_e-Szigno_Root_CA.crt
+mv 03179a64.crt Staat_der_Nederlanden_EV_Root_CA.crt
+mv 034868d6.crt Swisscom_Root_EV_CA_2.crt
+mv 039c618a.crt TURKTRUST_Certificate_Services_Provider_Root_2.crt
+mv 062cdee6.crt GlobalSign_Root_CA_-_R3.crt
+mv 064e0aa9.crt QuoVadis_Root_CA_2_G3.crt
+mv 080911ac.crt QuoVadis_Root_CA.crt
+mv 0810ba98.crt Root_CA_Generalitat_Valenciana.crt
+mv 09789157.crt Starfield_Services_Root_Certificate_Authority_-_G2.crt
+
+mv 106f3e4d.crt Entrust_Root_Certification_Authority_-_EC1.crt
+mv 116bf586.crt GeoTrust_Primary_Certification_Authority_-_G2.crt
+mv 128805a3.crt EE_Certification_Centre_Root_CA.crt
+mv 157753a5.crt AddTrust_External_Root.crt
+mv 1636090b.crt Hellenic_Academic_and_Research_Institutions_RootCA_2011.crt
+mv 1874d4aa.crt China_Internet_Network_Information_Center_EV_Certificates_Root.crt
+mv 18856ac4.crt SecureSign_RootCA11.crt
+mv 19c1fa33.crt S-TRUST_Universal_Root_CA.crt
+mv 1d3472b9.crt GlobalSign_ECC_Root_CA_-_R5.crt
+mv 1e08bfd1.crt IdenTrust_Public_Sector_Root_CA_1.crt
+mv 1e09d511.crt T-TeleSec_GlobalRoot_Class_2.crt
+mv 1ec4d31a.crt Verisign_Class_3_Public_Primary_Certification_Authority_-_G2.crt
+
+mv 2251b13a.crt ComSign_Secured_CA.crt
+mv 244b5494.crt DigiCert_High_Assurance_EV_Root_CA.crt
+mv 24ad0b63.crt Verisign_Class_1_Public_Primary_Certification_Authority.crt
+mv 2ae6433e.crt CA_Disig_Root_R2.crt
+mv 2ab3b959.crt NetLock_Express_Class_C_Root.crt
+mv 2b349938.crt AffirmTrust_Commercial.crt
+mv 2c3e3f84.crt UTN-USERFirst-Object.crt
+mv 2c543cd1.crt GeoTrust_Global_CA.crt
+mv 2e4eed3c.crt thawte_Primary_Root_CA.crt
+mv 2e5ac55d.crt DST_Root_CA_X3.crt
+
+mv 349f2832.crt EC-ACC.crt
+mv 3513523f.crt DigiCert_Global_Root_CA.crt
+mv 381ce4dd.crt ACEDICOM_Root.crt
+mv 3b2716e5.crt EBG_Elektronik_Sertifika_Hizmet_Saglayicisi.crt
+mv 3bde41ac.crt Autoridad_de_Certificacion_Firmaprofesional_CIF_A62634068.crt
+mv 3e45d192.crt Hongkong_Post_Root_CA_1.crt
+mv 3ee7e181.crt IGC_A.crt
+mv 3efd4dc0.crt Swisscom_Root_CA_2.crt
+
+mv 40547a79.crt COMODO_Certification_Authority.crt
+mv 415660c1.crt Verisign_Class_3_Public_Primary_Certification_Authority.crt
+mv 4304c5e5.crt Network_Solutions_Certificate_Authority.crt
+mv 442adcac.crt Certum_Root_CA.crt
+mv 480720ec.crt GeoTrust_Primary_Certification_Authority.crt
+mv 4881cc08.crt AddTrust_External_CA_Root.crt
+mv 48bec511.crt Certum_Trusted_Network_CA.crt
+mv 4a6481c9.crt GlobalSign_Root_CA_-_R2.crt
+mv 4bfab552.crt Starfield_Root_Certificate_Authority_-_G2.crt
+mv 4f316efb.crt SwissSign_Gold_CA_-_G2.crt
+
+mv 5273a94c.crt E-Tugra_Certification_Authority.crt
+mv 5443e9e3.crt T-TeleSec_GlobalRoot_Class_3.crt
+mv 54657681.crt Buypass_Class_2_Root_CA.crt
+mv 5620c4aa.crt TC_TrustCenter_Class_3_CA_II.crt
+mv 56657bde.crt Comodo_Trusted_Services_root.crt
+mv 578d5c04.crt Equifax_Secure_CA.crt
+mv 57b0f75e.crt UTN-USERFirst-Network_Applications.crt
+mv 57bbd831.crt ApplicationCA_-_Japanese_Government.crt
+mv 57bcb2da.crt SwissSign_Silver_CA_-_G2.crt
+mv 592c0a9a.crt CRKTRUST_Elektronik_Sertifika_Hizmet.crt
+mv 5ad8a5d6.crt GlobalSign_Root_CA.crt
+mv 5a4d6896.crt Staat_der_Nederlanden_Root_CA_-_G3.crt
+mv 5c44d531.crt Staat_der_Nederlanden_Root_CA_-_G2.crt
+mv 5cd81ad7.crt TeliaSonera_Root_CA_v1.crt
+mv 5d63b0ae.crt WoSign_CA_Limited.crt
+mv 5f15c80c.crt TWCA_Global_Root_CA.crt
+
+mv 607986c7.crt DigiCert_Global_Root_G2.crt
+mv 6410666e.crt Taiwan_GRCA.crt
+mv 653b494a.crt Baltimore_CyberTrust_Root.crt
+mv 65b876bd.crt TUBITAK_UEKAE_Kok_Sertifika_Hizmet_Saglayicisi_-_Surum_3.crt
+mv 667c66d4.crt Swisscom_Root_CA_1.crt
+mv 67d559d1.crt Sonera_Class_1_Root_CA.crt
+mv 6b99d060.crt Entrust_Root_Certification_Authority.crt
+mv 6f2c1157.crt AC_Raiz_Certicamara_S.A.crt
+
+mv 749e9e03.crt QuoVadis_Root_CA_1_G3.crt
+mv 75d1b2ed.crt  DigiCert_Trusted_Root_G4.crt
+mv 7f3d5d1d.crt DigiCert_Assured_ID_Root_G3.crt
+mv 706f604c.crt XRamp_Global_CA_Root.crt
+mv 76cb8f92.crt Cybertrust_Global_Root.crt
+mv 76faf6c0.crt QuoVadis_Root_CA_3.crt
+mv 778e3cb0.crt UTN_DATACorp_SGC_Root_CA.crt
+mv 790a7190.crt DST_ACES_CA_X6.crt
+mv 79ad8b43.crt  Equifax_Secure_eBusiness_CA_1.crt
+mv 7d0b38bd.crt VeriSign_Class_3_Public_Primary_Certification_Authority_-_G4.crt
+mv 7d5a75e4.crt  WellsSecure_Public_Root_Certificate_Authority.crt
+
+mv 8096d0a9.crt Certification_Authority_of_WoSign.crt
+mv 812e17de.crt Deutsche_Telekom_Root_CA_2.crt
+mv 8160b96c.crt Microsec_e-Szigno_Root_CA_2009.crt
+mv 861a399d.crt AddTrust_Low-Value_Services_Root.crt
+mv 861e0100.crt NetLock_Qualified_Class_QA_Root.crt
+mv 876f1e28.crt StartCom_Certification_Authority_G2.crt
+mv 8867006a.crt GeoTrust_Universal_CA_2.crt
+mv 88f89ea7.crt TURKTRUST_Certificate_Services_Provider_Root_1.crt
+mv 8b59b1ad.crt AddTrust_Public_Services_Root.crt
+mv 8d86cdd1.crt certSIGN_ROOT_CA.crt
+mv 8e52d3cd.crt Buypass_Class_3_CA_1.crt
+
+mv 9007ae68.crt CA_Disig_Root_R1.crt
+mv 9d04f354.crt DigiCert_Assured_ID_Root_G2.crt
+mv 930ac5d2.crt Actalis_Authentication_Root_CA.crt
+mv 93bc0acc.crt AffirmTrust_Networking.crt
+mv 9818ca0b.crt TC_TrustCenter_Universal_CA_III.crt
+mv 988a38cb.crt NetLock_Arany_Class_Gold_Fotanusitvany.crt
+mv 9c2e7d30.crt Sonera_Class_2_Root_CA.crt
+mv 9c472bf7.crt A-Trust-nQual-03.crt
+mv 9c8dfbd4.crt AffirmTrust_Premium_ECC.crt
+mv 9d520b32.crt Security_Communication_EV_RootCA1.crt
+mv 9f541fb4.crt Digital_Signature_Trust_Co._Global_CA_3.crt
+
+mv a5fd78f0.crt TC_TrustCenter_Class_2_CA_II.crt
+mv a6a593ba.crt Digital_Signature_Trust_Co._Global_CA_1.crt
+mv a760e1bd.crt Visa_eCommerce_Root.crt
+mv a8dee976.crt SwissSign_Platinum_CA_-_G2.crt
+mv a94d09e5.crt ACCVRAIZ1.crt
+mv ad088e1d.crt GeoTrust_Universal_CA.crt
+mv ae8153b9.crt StartCom_Certification_Authority.crt
+mv aee5f10d.crt Entrust.net_Premium_2048_Secure_Server_CA.crt
+
+mv b0e59380.crt GlobalSign.crt
+mv b1159c4c.crt DigiCert_Assured_ID_Root_CA.crt
+mv b13cc6df.crt UTN_USERFirst_Hardware_Root_CA.crt
+mv b1b8a7f3.crt OISTE_WISeKey_Global_Root_GA_CA.crt
+mv b204d74a.crt VeriSign_Class_3_Public_Primary_Certification_Authority_-_G5.crt
+mv b42ff584.crt Staat_der_Nederlanden_Root_CA.crt
+mv b66938e9.crt Secure_Global_CA.crt
+mv b6c5745d.crt CA_Disig.crt
+mv b727005e.crt AffirmTrust_Premium.crt
+mv b7a5b843.crt TWCA_Root_Certification_Authority.crt
+mv b7e7231a.crt NetLock_Business_Class_B_Root.crt
+mv b8e83700.crt Verisign_Class_1_Public_Primary_Certification_Authority_-_G2.crt
+mv ba89ed3b.crt thawte_Primary_Root_CA_-_G3.crt
+mv bad35b78.crt Verisign_Class_4_Public_Primary_Certification_Authority_-_G3.crt
+mv bb2d49a0.crt ComSign_CA.crt
+mv bd1910d4.crt CNNIC_ROOT.crt
+
+mv c01cdfa2.crt VeriSign_Universal_Root_Certification_Authority.crt
+mv c089bbbd.crt thawte_Primary_Root_CA_-_G2.crt
+mv c0ff1f52.crt Verisign_Class_3_Public_Primary_Certification_Authority_-_G3.crt
+mv c28a8a30.crt D-TRUST_Root_Class_3_CA_2_2009.crt
+mv c47d9980.crt Chambers_of_Commerce_Root_-_2008.crt
+mv c5d3212a.crt Autoridad_de_Certificacion_Raiz_del_Estado_Venezolano.crt
+mv c5e082db.crt UTN_USERFirst_Email_Root_CA.crt
+mv c8841d13.crt TC_TrustCenter_Universal_CA_I.crt
+mv c99398f3.crt RSA_Security_2048_v3.crt
+mv c9f83a1c.crt Comodo_Secure_Services_root.crt
+mv ca6e4ad9.crt ePKI_Root_Certification_Authority.crt
+mv cb357862.crt Verisign_Class_2_Public_Primary_Certification_Authority_-_G2.crt
+mv cb59f961.crt Camerfirma_Global_Chambersign_Root.crt
+mv cbeee9e2.crt GeoTrust_Global_CA_2.crt
+mv cbf06781.crt Go_Daddy_Root_Certificate_Authority_-_G2.crt
+mv cc450945.crt Izenpe.com.crt
+mv cd58d51e.crt Security_Communication_RootCA2.crt
+mv cfa1c2ee.crt Buypass_Class_2_CA_1.crt
+
+mv d4dae3dd.crt D-TRUST_Root_Class_3_CA_2_EV_2009.crt
+mv d6325660.crt COMODO_RSA_Certification_Authority.crt
+mv dd8e9d41.crt DigiCert_Global_Root_G3.crt
+mv d7e8dc79.crt QuoVadis_Root_CA_2.crt
+mv d853d49e.crt Trustis_FPS_Root_CA.crt
+mv d957f522.crt Certinomis_-_Autorite_Racine.crt
+mv d9d12c58.crt NetLock_Notary_Class_A_Root.crt
+mv dc45b0bd.crt Verisign_Class_2_Public_Primary_Certification_Authority_-_G3.crt
+
+mv e113c810.crt Certigna.crt
+mv e18bfb83.crt QuoVadis_Root_CA_3_G3.crt
+mv e2799e36.crt GeoTrust_Primary_Certification_Authority_-_G3.crt
+mv e36a6752.crt Atos_TrustedRoot_2011.crt
+mv e536d871.crt AddTrust_Qualified_Certificates_Root.crt
+mv e8de2f56.crt Buypass_Class_3_Root_CA.crt
+mv eb99629b.crt VeriSign_Class_3_Public_Primary_Certification_Authority_-_G5.crt
+mv ee1365c0.crt Verisign_Class_1_Public_Primary_Certification_Authority_-_G3.crt
+mv ee64a828.crt Comodo_AAA_Services_root.crt
+mv eed8c118.crt COMODO_ECC_Certification_Authority.crt
+mv ef2f636c.crt Equifax_Secure_Global_eBusiness_CA.crt
+mv ef954a4e.crt IdenTrust_Commercial_Root_CA_1.crt
+
+mv f060240e.crt Certplus_Class_2_Primary_CA.crt
+mv f081611a.crt Go_Daddy_Class_2_CA.crt
+mv f30dd6ad.crt USERTrust_ECC_Certification_Authority.crt
+mv f3377b1b.crt Security_Communication_Root_CA.crt
+mv f387163d.crt Starfield_Class_2_CA.crt
+mv f39fc864.crt SecureTrust_CA.crt
+mv f90208f7.crt Camerfirma_Chambers_of_Commerce_Root.crt
+mv fcac10e3.crt Juur-SK.crt
+mv fc5a8f99.crt USERTrust_RSA_Certification_Authority.crt
+
+#################################
+# make changes to live filesystem
+#################################
+cd /tmp
+rm -rf /usr/local/share/ca-certificates
+rm -rf /usr/local/etc/ssl/certs
+rm -rf /usr/local/etc/ssl/cacert.pem
+mkdir -p /usr/local/share/ca-certificates
+mkdir -p /usr/local/etc/ssl/certs
+cp -R mozilla /usr/local/share/ca-certificates/
+ln -s /usr/local/share/ca-certificates/mozilla/* /usr/local/etc/ssl/certs/
+
+cd /usr/local/etc/ssl
+CERTS=`ls certs  | sed -r -s 's/.{4}$//' `
+cd certs
+for Z in $CERTS
+do
+mv $Z.crt $Z.pem
+done
+c_rehash 
+
+cd /tmp
+cp -f ca-certificates.crt  /usr/local/etc/ssl/certs/
+ln -s /usr/local/etc/ssl/certs/ca-certificates.crt /usr/local/etc/ssl/cacert.pem
+
+###############
+# openssl part two
+################
+
+# add build scripts to doc
+#######################
+mkdir -p $P-doc/usr/local/share/doc/$P
+cp make-ca.sh $P-doc/usr/local/share/doc/$P/
+cp make-cert.pl $P-doc/usr/local/share/doc/$P/
+chmod 644 $P-doc/usr/local/share/doc/$P/*
+
+# add certificates to TCZ
+##########################  
+mkdir -p $P/usr/local/share/ca-certificates/
+cp -R /usr/local/share/ca-certificates/mozilla $P/usr/local/share/ca-certificates/
+
+mkdir -p $P/usr/local/share/$P/files
+rm -rf $P/usr/local/etc/ssl/certs
+rm -rf $P/usr/local/etc/ssl/private
+
+# fix perl pathway 
+###################
+sed -e 's/usr/usr\/local/' -i $P/usr/local/etc/ssl/misc/tsget
+
+cd /usr/local/etc/ssl
+tar -czf certs.tar.gz certs
+cd /tmp
+mv /usr/local/etc/ssl/certs.tar.gz $P/usr/local/share/$P/files/
+
+#tce-installed
+###############
+mkdir -p $P/usr/local/tce.installed
+
+echo '#!/bin/sh
+# By bmarkus May 4, 2013
+# add gordon64 24/8/2015
+[  -d /usr/local/etc/ssl/private ] || mkdir -p /usr/local/etc/ssl/private
+[  -d /usr/local/etc/ssl/crl ] || mkdir -p /usr/local/etc/ssl/crl
+[  -d /usr/local/etc/ssl/newcerts ] || mkdir -p /usr/local/etc/ssl/newcerts
+[  -f /usr/local/etc/ssl/index.txt ] || touch /usr/local/etc/ssl/index.txt
+[  -f /usr/local/etc/ssl/serial ] || echo "01" > /usr/local/etc/ssl/serial
+[  -f /usr/local/etc/ssl/crlnumber ] || echo "01" > /usr/local/etc/ssl/crlnumber
+tar xzf /usr/local/share/openssl/files/certs.tar.gz -C /usr/local/etc/ssl
+ln -s /usr/local/etc/ssl/certs/ca-certificates.crt /usr/local/etc/ssl/certs/cacert.pem
+ln -s /usr/local/etc/ssl /etc
+' > $P/usr/local/tce.installed/$P
+
+chown -R root:staff $P/usr/local/tce.installed
+chmod -R 775 $P/usr/local/tce.installed
+
+# TCZ them
+#########
+
+LIST2="$P $P-dev $P-doc "
+for Z in $LIST2
+do
+	mksquashfs $Z $Z.tcz
+	md5sum $Z.tcz > $Z.tcz.md5.txt
+	cd $Z
+	find usr -not -type d > /tmp/$Z.tcz.list
+        cd /tmp
+done
+
+# create dep files
+###############
+echo "openssl.tcz " > $P-dev.tcz.dep
+
+# create info files let submitqc5 add size
+
+echo "Title:          openssl.tcz  TESTING
+Description:    Open Source toolkit for SSL/TLS plus certs
+Version:        1.0.2d and certs 2015/08/16
+Author:         see below
+Original-site:  see below
+Copying-policy: see below
+Size:		
+Extension_by:   gordons64
+Tags:           openssl  security crypto certificates
+Comments:       openssl sslv3 disabled at compile
+                Authors openssl: OpenSSL Project Team
+                site: http://www.openssl.org
+                License: OpenSSL license
+
+                This TCZ contains Certificates adapted from
+http://www.linuxfromscratch.org/blfs/view/svn/postlfs/cacerts.html
+                Authors: see doc
+                License: https://www.mozilla.org/MPL/2.0/
+                Previous TCZ=openssl-1.0.1 by bmarkus
+
+                Compiled for x86 6.x
+Change-log:     2015/09/01 First version 
+Current:        2015/09/01
+" > $P.tcz.info
+
+echo "Title:          openssl-dev.tcz
+Description:    Dev files for openssl
+Version:        1.0.2d 
+Author:         OpenSSL Project Team 
+Original-site:  http://www.openssl.org
+Copying-policy: GPL v3
+Size:		
+Extension_by:   gordons64
+Tags:           openssl 
+Comments:       Development files
+                Previous TCZ=openssl-1.0.1 by bmarkus
+
+                Compiled for x86 6.x
+Change-log:     2015/09/01 First version 
+Current:        2015/09/01
+" > $P-dev.tcz.info
+
+echo "Title:          openssl-doc.tcz
+Description:    openssl docs
+Version:        1.0.2d 
+Author:         OpenSSL Project Team 
+Original-site:  http://www.openssl.org
+Copying-policy: GPL v3
+Size:		
+Extension_by:   gordons64
+Tags:           openssl 
+Comments:       Contains man pages
+                also some build files for certs
+                Previous TCZ=openssl-1.0.1 by bmarkus
+
+                Compiled for x86 6.x
+Change-log:     2015/09/01 First version 
+Current:        2015/09/01
+" > $P-doc.tcz.info
+
+submitqc6
