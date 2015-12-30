@@ -1,0 +1,292 @@
+#!/bin/sh
+#
+######################################################
+# Build script for Core 6.0                          #
+#                                                    #
+# See .info for details                              #
+######################################################
+
+######################################################
+# Configure extension creation parameters            #
+######################################################
+
+SRCNAM=ncurses-5.9.tar.gz
+WRKDIR=ncurses-5.9
+EXTNAM=ncurses
+TMPDIR=/tmp/ncurses
+
+######################################################
+# Prepare extension creation                         #
+######################################################
+
+# Remove dirs and files left from previous creation
+
+rm -r -f $WRKDIR
+
+rm -r -f $TMPDIR
+rm -r -f $TMPDIR-doc
+rm -r -f $TMPDIR-dev
+rm -r -f $TMPDIR-terminfo
+#rm -r -f $TMPDIR-common
+rm -r -f $TMPDIR-utils
+
+# Crete temporary directory
+
+mkdir -p $TMPDIR
+
+# Add TC specific files
+
+#mkdir -p $TMPDIR-dev/usr/local/tce.installed
+#cp $EXTNAM-dev.ins $TMPDIR-dev/usr/local/tce.installed/$EXTNAM-dev
+#chmod -R 775 $TMPDIR-dev/usr/local/tce.installed
+#chown -R root.staff $TMPDIR-dev/usr/local/tce.installed
+
+######################################################
+# Compile extension                                  #
+######################################################
+
+# Export variables needed for compilation
+
+export CFLAGS="-O2 -pipe -march=i486 -mtune=i686"
+export CXXFLAGS="-O2 -pipe -fno-exceptions -fno-rtti -march=i486 -mtune=i686"
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+
+# Unpack source in current directory
+
+tar -xf $SRCNAM
+
+# Configure it
+
+cd $WRKDIR
+./configure \
+--prefix=/usr/local \
+--with-shared \
+--with-gpm \
+--enable-termcap \
+--enable-overwrite \
+--enable-widec
+
+# Compile
+
+make
+
+# Install in base temp dir
+
+make install DESTDIR=$TMPDIR
+
+# Delete compilation work directory
+
+cd ..
+rm -r -f $WRKDIR
+
+# Create symlinks
+
+cd $TMPDIR/usr/local/lib
+
+ln -s libformw.so libform.so
+ln -s libformw.so.5 libform.so.5
+ln -s libformw.so.5.9 libform.so.5.9
+ln -s libformw.a libform.a
+ln -s libformw_g.a libform_g.a
+
+ln -s libmenuw.so libmenu.so
+ln -s libmenuw.so.5 libmenu.so.5
+ln -s libmenuw.so.5.9 libmenu.so.5.9
+ln -s libmenuw.a libmenu.a
+ln -s libmenuw_g.a libmenu_g.a
+
+ln -s libncursesw.so libncurses.so
+ln -s libncursesw.so.5 libncurses.so.5
+ln -s libncursesw.so.5.9 libncurses.so.5.9
+ln -s libncursesw.a libncurses.a
+ln -s libncursesw_g.a libncurses_g.a
+
+ln -s libpanelw.so libpanel.so
+ln -s libpanelw.so.5 libpanel.so.5
+ln -s libpanelw.so.5.9 libpanel.so.5.9
+ln -s libpanelw.a libpanel.a
+ln -s libpanelw_g.a libpanel_g.a
+
+ln -s libncurses++w.a libncurses++.a
+
+# Adjust directory access rigths
+
+find $TMPDIR/ -type d | xargs chmod -v 755;
+
+# Strip executables
+
+find $TMPDIR | xargs file | grep ELF | cut -f 1 -d : | xargs strip --strip-unneeded
+
+# Move files to doc extension
+
+mkdir -p $TMPDIR-doc/usr/local
+mv $TMPDIR/usr/local/man $TMPDIR-doc/usr/local
+
+# Move files to dev extension
+
+mkdir -p $TMPDIR-dev/usr/local/lib
+mv $TMPDIR/usr/local/include $TMPDIR-dev/usr/local
+mv $TMPDIR/usr/local/lib/*.a $TMPDIR-dev/usr/local/lib
+#mv $TMPDIR/usr/local/lib/*.la $TMPDIR-dev/usr/local/lib
+#mv $TMPDIR/usr/local/lib/pkgconfig $TMPDIR-dev/usr/local/lib
+
+# Move files to terminfo extension
+
+mkdir -p $TMPDIR-terminfo/usr/local/share
+mv $TMPDIR/usr/local/share/terminfo $TMPDIR-terminfo/usr/local/share
+
+# Move back common terminfo to base
+
+mkdir -p  $TMPDIR/usr/local/share/terminfo/a
+mv $TMPDIR-terminfo/usr/local/share/terminfo/a/ansi $TMPDIR/usr/local/share/terminfo/a
+mkdir -p  $TMPDIR/usr/local/share/terminfo/l
+mv $TMPDIR-terminfo/usr/local/share/terminfo/l/linux $TMPDIR/usr/local/share/terminfo/l
+mkdir -p  $TMPDIR/usr/local/share/terminfo/r
+mv $TMPDIR-terminfo/usr/local/share/terminfo/r/rxvt $TMPDIR/usr/local/share/terminfo/r
+mkdir -p  $TMPDIR/usr/local/share/terminfo/v
+mv $TMPDIR-terminfo/usr/local/share/terminfo/v/vt100 $TMPDIR/usr/local/share/terminfo/v
+mv $TMPDIR-terminfo/usr/local/share/terminfo/v/vt102 $TMPDIR/usr/local/share/terminfo/v
+mv $TMPDIR-terminfo/usr/local/share/terminfo/v/vt102+enq $TMPDIR/usr/local/share/terminfo/v
+mv $TMPDIR-terminfo/usr/local/share/terminfo/v/vt102-nsgr $TMPDIR/usr/local/share/terminfo/v
+mv $TMPDIR-terminfo/usr/local/share/terminfo/v/vt102-w $TMPDIR/usr/local/share/terminfo/v
+mkdir -p  $TMPDIR/usr/local/share/terminfo/x
+mv $TMPDIR-terminfo/usr/local/share/terminfo/x/xterm $TMPDIR/usr/local/share/terminfo/x
+mv $TMPDIR-terminfo/usr/local/share/terminfo/x/xterm-color $TMPDIR/usr/local/share/terminfo/x
+mv $TMPDIR-terminfo/usr/local/share/terminfo/x/xterm-new $TMPDIR/usr/local/share/terminfo/x
+mv $TMPDIR-terminfo/usr/local/share/terminfo/x/xterm-vt220 $TMPDIR/usr/local/share/terminfo/x
+
+# Move common parts to extension
+
+#mkdir -p  $TMPDIR-common/usr/local/share
+#mv $TMPDIR/usr/local/share/tabset $TMPDIR-common/usr/local/share
+
+# Move common parts to extension
+
+mkdir -p  $TMPDIR-utils/usr/local
+mv $TMPDIR/usr/local/bin $TMPDIR-utils/usr/local
+
+# Some more tuning
+
+#rm -r -f $TMPDIR/usr/local/share
+#rm -f $TMPDIR/usr/local/lib/terminfo
+
+#mkdir -p  $TMPDIR-common/usr/local/lib
+#cd $TMPDIR-common/usr/local/lib
+#ln -s ../share/terminfo terminfo
+
+cd $TMPDIR/usr/local/lib
+ln -s libncursesw.so libtermcap.so
+
+###################################################
+# Create base extension in temp dir               #
+###################################################
+
+cd $TMPDIR
+cd ..
+mksquashfs $TMPDIR $EXTNAM.tcz
+cd $TMPDIR
+find usr -not -type d > $EXTNAM.tcz.list
+mv ../$EXTNAM.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM.tcz > $EXTNAM.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create doc extension in temp dir                #
+###################################################
+
+cd $TMPDIR-doc
+cd ..
+mksquashfs $TMPDIR-doc $EXTNAM-doc.tcz
+cd $TMPDIR-doc
+find usr -not -type d > $EXTNAM-doc.tcz.list
+mv ../$EXTNAM-doc.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-doc.tcz > $EXTNAM-doc.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create dev extension in temp dir                #
+###################################################
+
+cd $TMPDIR-dev
+cd ..
+mksquashfs $TMPDIR-dev $EXTNAM-dev.tcz
+cd $TMPDIR-dev
+find usr -not -type d > $EXTNAM-dev.tcz.list
+mv ../$EXTNAM-dev.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-dev.tcz > $EXTNAM-dev.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create terminfo extension in temp dir           #
+###################################################
+
+cd $TMPDIR-terminfo
+cd ..
+mksquashfs $TMPDIR-terminfo $EXTNAM-terminfo.tcz
+cd $TMPDIR-terminfo
+find usr -not -type d > $EXTNAM-terminfo.tcz.list
+mv ../$EXTNAM-terminfo.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-terminfo.tcz > $EXTNAM-terminfo.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create common extension in temp dir             #
+###################################################
+
+#cd $TMPDIR-common
+#cd ..
+#mksquashfs $TMPDIR-common $EXTNAM-common.tcz
+#cd $TMPDIR-common
+#find usr -not -type d > $EXTNAM-common.tcz.list
+#mv ../$EXTNAM-common.tcz .
+
+# Create md5 file
+
+#md5sum $EXTNAM-common.tcz > $EXTNAM-common.tcz.md5.txt
+
+# Cleanup temp directory
+
+#rm -r -f usr
+
+###################################################
+# Create utils extension in temp dir              #
+###################################################
+
+cd $TMPDIR-utils
+cd ..
+mksquashfs $TMPDIR-utils $EXTNAM-utils.tcz
+cd $TMPDIR-utils
+find usr -not -type d > $EXTNAM-utils.tcz.list
+mv ../$EXTNAM-utils.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-utils.tcz > $EXTNAM-utils.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr

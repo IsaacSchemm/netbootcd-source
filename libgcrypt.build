@@ -1,0 +1,150 @@
+#!/bin/sh
+#
+######################################################
+# Build script for Core 6.0                          #
+#                                                    #
+# See .info for details                              #
+######################################################
+
+######################################################
+# Configure extension creation parameters            #
+######################################################
+
+SRCNAM=libgcrypt-1.6.2.tar.bz2
+WRKDIR=libgcrypt-1.6.2
+EXTNAM=libgcrypt
+TMPDIR=/tmp/libgcrypt
+
+######################################################
+# Prepare extension creation                         #
+######################################################
+
+# Remove dirs and files left from previous creation
+
+rm -r -f $WRKDIR
+
+rm -r -f $TMPDIR
+rm -r -f $TMPDIR-dev
+rm -r -f $TMPDIR-doc
+
+# Crete temporary directory
+
+mkdir -p $TMPDIR
+
+######################################################
+# Compile extension                                  #
+######################################################
+
+# Export variables needed for compilation
+
+export CFLAGS="-O2 -pipe -march=i486 -mtune=i686"
+export CXXFLAGS="-O2 -pipe -fno-exceptions -fno-rtti -march=i486 -mtune=i686"
+#export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+
+# Unpack source in current directory
+
+tar -xf $SRCNAM
+
+# Configure it
+
+cd $WRKDIR
+./configure --prefix=/usr/local --enable-shared --enable-static
+
+# Compile
+
+make
+
+# Install in base temp dir
+
+make install DESTDIR=$TMPDIR
+
+# Delete compilation work directory
+
+cd ..
+rm -r -f $WRKDIR
+
+# Adjust directory access rigths
+
+find $TMPDIR/ -type d | xargs chmod -v 755;
+
+# Strip executables
+
+find $TMPDIR | xargs file | grep ELF | cut -f 1 -d : | xargs strip --strip-unneeded
+
+# Move files to dev extension
+
+mkdir -p $TMPDIR-dev/usr/local/lib
+mkdir -p $TMPDIR-dev/usr/local/share
+mkdir -p $TMPDIR-dev/usr/local/bin
+
+mv $TMPDIR/usr/local/bin/libgcrypt-config $TMPDIR-dev/usr/local/bin
+mv $TMPDIR/usr/local/include $TMPDIR-dev/usr/local
+mv $TMPDIR/usr/local/lib/*.a $TMPDIR-dev/usr/local/lib
+mv $TMPDIR/usr/local/lib/*.la $TMPDIR-dev/usr/local/lib
+mv $TMPDIR/usr/local/share/aclocal $TMPDIR-dev/usr/local/share
+
+# Move files to doc extension
+
+mkdir -p $TMPDIR-doc/usr/local/share
+mv $TMPDIR/usr/local/share/info $TMPDIR-doc/usr/local/share
+mv $TMPDIR/usr/local/share/man $TMPDIR-doc/usr/local/share
+
+rm -f $TMPDIR-doc/usr/local/share/info/dir
+
+###################################################
+# Create base extension in temp dir               #
+###################################################
+
+cd $TMPDIR
+cd ..
+mksquashfs $TMPDIR $EXTNAM.tcz
+cd $TMPDIR
+find usr -not -type d > $EXTNAM.tcz.list
+mv ../$EXTNAM.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM.tcz > $EXTNAM.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create dev extension in temp dir                #
+###################################################
+
+cd $TMPDIR-dev
+cd ..
+mksquashfs $TMPDIR-dev $EXTNAM-dev.tcz
+cd $TMPDIR-dev
+find usr -not -type d > $EXTNAM-dev.tcz.list
+mv ../$EXTNAM-dev.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-dev.tcz > $EXTNAM-dev.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
+###################################################
+# Create ldoc extension in temp dir               #
+###################################################
+
+cd $TMPDIR-doc
+cd ..
+mksquashfs $TMPDIR-doc $EXTNAM-doc.tcz
+cd $TMPDIR-doc
+find usr -not -type d > $EXTNAM-doc.tcz.list
+mv ../$EXTNAM-doc.tcz .
+
+# Create md5 file
+
+md5sum $EXTNAM-doc.tcz > $EXTNAM-doc.tcz.md5.txt
+
+# Cleanup temp directory
+
+rm -r -f usr
+
