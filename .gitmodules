@@ -1,0 +1,4 @@
+[submodule "grub4dos-0.4.6a"]
+	path = grub4dos-0.4.6a
+	url = https://github.com/chenall/grub4dos
+	branch = 0.4.6a
